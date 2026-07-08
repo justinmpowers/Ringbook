@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-const OCCASIONS = ['Wedding', 'Birthday', 'Funeral', 'Retirement', 'Baby Shower', 'Reunion', 'Other'];
+import { OCCASIONS } from '../occasions.js';
 
 export default function EventForm({ initialValues, onSubmit, onCancel, submitLabel = 'Create Guestbook' }) {
   const [title, setTitle] = useState(initialValues?.title || '');

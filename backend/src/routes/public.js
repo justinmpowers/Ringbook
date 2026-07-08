@@ -23,7 +23,7 @@ router.get('/config', (req, res) => {
 
 router.get('/events/:slug', (req, res) => {
   const event = db.prepare(`
-    SELECT slug, title, occasion, greeting, is_active FROM events WHERE slug = ?
+    SELECT slug, title, occasion, greeting, is_active, has_cover_image, updated_at FROM events WHERE slug = ?
   `).get(req.params.slug);
 
   if (!event) {
@@ -31,6 +31,20 @@ router.get('/events/:slug', (req, res) => {
     return;
   }
   res.json(event);
+});
+
+router.get('/events/:slug/cover', (req, res) => {
+  const event = db.prepare('SELECT id, has_cover_image FROM events WHERE slug = ?').get(req.params.slug);
+
+  if (!event || !event.has_cover_image) {
+    res.status(404).end();
+    return;
+  }
+
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(path.join(config.coversDir, `${event.id}.jpg`), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
 });
 
 router.post('/events/:slug/recordings', upload.single('audio'), async (req, res) => {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import EventForm from '../components/EventForm.jsx';
 import { LogoutIcon, PhoneIcon, PlusIcon } from '../components/icons.jsx';
+import { occasionIcon } from '../occasions.js';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -75,19 +76,29 @@ export default function AdminDashboardPage() {
       )}
 
       <ul className="event-list">
-        {events.map((event) => (
-          <li key={event.id}>
-            <Link to={`/admin/events/${event.id}`} className="card event-list-item">
-              <div>
-                <strong>{event.title}</strong>
-                <span className="event-meta">{event.occasion} · {event.recording_count} message{event.recording_count === 1 ? '' : 's'}</span>
-              </div>
-              <span className={`badge ${event.is_active ? 'badge-active' : 'badge-closed'}`}>
-                {event.is_active ? 'Open' : 'Closed'}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {events.map((event) => {
+          const Icon = occasionIcon(event.occasion);
+          return (
+            <li key={event.id}>
+              <Link to={`/admin/events/${event.id}`} className="card event-list-item">
+                {event.has_cover_image ? (
+                  <span className="occasion-badge occasion-badge-photo">
+                    <img src={`/api/public/events/${event.slug}/cover?v=${encodeURIComponent(event.updated_at)}`} alt="" />
+                  </span>
+                ) : (
+                  <span className="occasion-badge"><Icon width={18} height={18} /></span>
+                )}
+                <div className="event-list-body">
+                  <strong>{event.title}</strong>
+                  <span className="event-meta">{event.occasion} · {event.recording_count} message{event.recording_count === 1 ? '' : 's'}</span>
+                </div>
+                <span className={`badge ${event.is_active ? 'badge-active' : 'badge-closed'}`}>
+                  {event.is_active ? 'Open' : 'Closed'}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

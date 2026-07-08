@@ -4,6 +4,7 @@ const config = require('./config');
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.recordingsDir, { recursive: true });
+fs.mkdirSync(config.coversDir, { recursive: true });
 fs.mkdirSync(config.tmpUploadDir, { recursive: true });
 
 const db = new Database(config.dbPath);
@@ -35,5 +36,10 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_recordings_event_id ON recordings(event_id);
 `);
+
+const eventColumns = db.prepare('PRAGMA table_info(events)').all().map((c) => c.name);
+if (!eventColumns.includes('has_cover_image')) {
+  db.exec('ALTER TABLE events ADD COLUMN has_cover_image INTEGER NOT NULL DEFAULT 0');
+}
 
 module.exports = db;

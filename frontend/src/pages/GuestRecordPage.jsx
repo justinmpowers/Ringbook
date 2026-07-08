@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import Recorder from '../components/Recorder.jsx';
-import { BookIcon, CheckIcon } from '../components/icons.jsx';
+import Confetti from '../components/Confetti.jsx';
+import { BookIcon, CheckIcon, PhoneIcon } from '../components/icons.jsx';
+import { occasionIcon } from '../occasions.js';
+
+const SOLEMN_OCCASIONS = new Set(['Funeral']);
 
 export default function GuestRecordPage() {
   const { slug } = useParams();
@@ -86,64 +90,86 @@ export default function GuestRecordPage() {
   if (phase === 'closed') {
     return (
       <div className="guest-page page-center">
-        <div className="guest-card guest-card-status">
-          <BookIcon className="status-icon" width={40} height={40} />
-          <h1>{event.title}</h1>
-          <p>This guestbook is no longer accepting new messages. Thanks for stopping by!</p>
+        <div className="guest-card">
+          <div className="guest-card-status">
+            <BookIcon className="status-icon" width={40} height={40} />
+            <h1>{event.title}</h1>
+            <p>This guestbook is no longer accepting new messages. Thanks for stopping by!</p>
+          </div>
         </div>
       </div>
     );
   }
 
   if (phase === 'done') {
+    const celebratory = !SOLEMN_OCCASIONS.has(event.occasion);
     return (
       <div className="guest-page page-center">
-        <div className="guest-card guest-card-status">
-          <CheckIcon className="status-icon status-icon-success" width={40} height={40} />
-          <h1>Message saved!</h1>
-          <p>Thank you for leaving your voice in the {event.title} guestbook.</p>
-          <button type="button" className="button-primary" onClick={() => { setGuestName(''); setPhase('ready'); }}>
-            Leave Another Message
-          </button>
+        <div className="guest-card">
+          <div className="guest-card-status">
+            <div className="status-icon-wrap">
+              {celebratory && <Confetti />}
+              <CheckIcon className="status-icon status-icon-success" width={40} height={40} />
+            </div>
+            <h1>Message saved!</h1>
+            <p>Thank you for leaving your voice in the {event.title} guestbook.</p>
+            <button type="button" className="button-primary" onClick={() => { setGuestName(''); setPhase('ready'); }}>
+              Leave Another Message
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  const OccasionIcon = occasionIcon(event.occasion);
+
   return (
     <div className="guest-page page-center">
       <div className="guest-card">
-        {event.occasion && <p className="eyebrow">{event.occasion} Guestbook</p>}
-        <h1>{event.title}</h1>
-        {event.greeting && <p className="greeting">{event.greeting}</p>}
-
-        {(phase === 'ready') && (
-          <Recorder maxSeconds={config.maxRecordingSeconds} onStop={handleStop} />
-        )}
-
-        {(phase === 'preview' || phase === 'submitting') && (
-          <div className="preview">
-            <span className="preview-label">Your message</span>
-            <audio controls src={previewUrl} />
-            <input
-              type="text"
-              placeholder="Your name (optional)"
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              disabled={phase === 'submitting'}
-            />
-            {errorMessage && <p className="error-text">{errorMessage}</p>}
-            <div className="preview-actions">
-              <button type="button" onClick={handleReRecord} disabled={phase === 'submitting'}>
-                Re-record
-              </button>
-              <button type="button" className="button-primary" onClick={handleSubmit} disabled={phase === 'submitting'}>
-                {phase === 'submitting' ? 'Saving…' : 'Save to Guestbook'}
-              </button>
-            </div>
+        {Boolean(event.has_cover_image) && (
+          <div className="guest-cover">
+            <img src={`/api/public/events/${slug}/cover?v=${encodeURIComponent(event.updated_at)}`} alt="" />
           </div>
         )}
+        <div className="guest-card-body">
+          {event.occasion && (
+            <p className="eyebrow"><OccasionIcon width={14} height={14} /> {event.occasion} Guestbook</p>
+          )}
+          <h1>{event.title}</h1>
+          {event.greeting && <p className="greeting">{event.greeting}</p>}
+
+          <div key={phase} className="fade-item">
+            {(phase === 'ready') && (
+              <Recorder maxSeconds={config.maxRecordingSeconds} onStop={handleStop} />
+            )}
+
+            {(phase === 'preview' || phase === 'submitting') && (
+              <div className="preview">
+                <span className="preview-label">Your message</span>
+                <audio controls src={previewUrl} />
+                <input
+                  type="text"
+                  placeholder="Your name (optional)"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  disabled={phase === 'submitting'}
+                />
+                {errorMessage && <p className="error-text">{errorMessage}</p>}
+                <div className="preview-actions">
+                  <button type="button" onClick={handleReRecord} disabled={phase === 'submitting'}>
+                    Re-record
+                  </button>
+                  <button type="button" className="button-primary" onClick={handleSubmit} disabled={phase === 'submitting'}>
+                    {phase === 'submitting' ? 'Saving…' : 'Save to Guestbook'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+      <p className="guest-footer"><PhoneIcon width={12} height={12} /> Ringbook</p>
     </div>
   );
 }

@@ -4,9 +4,11 @@ import { api } from '../api.js';
 import EventForm from '../components/EventForm.jsx';
 import QRCodeDisplay from '../components/QRCodeDisplay.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
+import CoverImageUploader from '../components/CoverImageUploader.jsx';
 import {
   ArrowLeftIcon, CheckIcon, CopyIcon, DownloadIcon, LockIcon, PencilIcon, TrashIcon, UnlockIcon,
 } from '../components/icons.jsx';
+import { occasionIcon } from '../occasions.js';
 
 function formatDuration(seconds) {
   if (!seconds && seconds !== 0) return '';
@@ -89,7 +91,12 @@ export default function AdminEventDetailPage() {
         ) : (
           <>
             <div className="event-detail-heading">
-              <h1>{event.title}</h1>
+              <div className="event-detail-title">
+                <span className="occasion-badge occasion-badge-lg">
+                  {(() => { const Icon = occasionIcon(event.occasion); return <Icon width={20} height={20} />; })()}
+                </span>
+                <h1>{event.title}</h1>
+              </div>
               <span className={`badge ${event.is_active ? 'badge-active' : 'badge-closed'}`}>
                 {event.is_active ? 'Open' : 'Closed'}
               </span>
@@ -108,6 +115,12 @@ export default function AdminEventDetailPage() {
             </div>
           </>
         )}
+      </div>
+
+      <div className="card">
+        <h2>Guestbook Photo</h2>
+        <p className="event-meta">Shown to guests above the recorder — a couple's photo, a portrait, whatever fits the occasion.</p>
+        <CoverImageUploader event={event} onChange={setEvent} />
       </div>
 
       <div className="card share-card">

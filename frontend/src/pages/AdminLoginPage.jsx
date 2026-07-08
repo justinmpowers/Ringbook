@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { PhoneIcon } from '../components/icons.jsx';
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function AdminLoginPage() {
   return (
     <div className="page-center">
       <form className="login-form" onSubmit={handleSubmit}>
+        <span className="brand-mark login-brand-mark"><PhoneIcon width={20} height={20} /></span>
         <h1>Ringbook Admin</h1>
         <input
           type="text"

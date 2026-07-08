@@ -1,19 +1,30 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const multer = require('multer');
 const archiver = require('archiver');
 const QRCode = require('qrcode');
 const db = require('../db');
 const config = require('../config');
 const requireAdmin = require('../middleware/requireAdmin');
 const { uniqueSlugFromTitle } = require('../services/slug');
+const { normalizeCoverImage } = require('../services/image');
 
 const router = express.Router();
 
 router.use(requireAdmin);
 
+const coverUpload = multer({
+  dest: config.tmpUploadDir,
+  limits: { fileSize: config.maxCoverUploadMb * 1024 * 1024 },
+});
+
 function eventRecordingsDir(eventId) {
   return path.join(config.recordingsDir, String(eventId));
+}
+
+function eventCoverPath(eventId) {
+  return path.join(config.coversDir, `${eventId}.jpg`);
 }
 
 function guestUrlForSlug(slug) {
@@ -95,7 +106,46 @@ router.delete('/:id', (req, res) => {
 
   db.prepare('DELETE FROM events WHERE id = ?').run(event.id);
   fs.rmSync(eventRecordingsDir(event.id), { recursive: true, force: true });
+  fs.rmSync(eventCoverPath(event.id), { force: true });
   res.status(204).end();
+});
+
+router.post('/:id/cover', coverUpload.single('image'), async (req, res) => {
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+  const cleanup = () => { if (req.file) fs.rm(req.file.path, { force: true }, () => {}); };
+
+  if (!event) {
+    cleanup();
+    res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+  if (!req.file || !req.file.mimetype.startsWith('image/')) {
+    cleanup();
+    res.status(400).json({ error: 'A valid image file is required' });
+    return;
+  }
+
+  try {
+    await normalizeCoverImage(req.file.path, eventCoverPath(event.id));
+    db.prepare("UPDATE events SET has_cover_image = 1, updated_at = datetime('now') WHERE id = ?").run(event.id);
+    res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(event.id));
+  } catch (err) {
+    res.status(500).json({ error: 'Could not process that image' });
+  } finally {
+    cleanup();
+  }
+});
+
+router.delete('/:id/cover', (req, res) => {
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+  if (!event) {
+    res.status(404).json({ error: 'Event not found' });
+    return;
+  }
+
+  fs.rmSync(eventCoverPath(event.id), { force: true });
+  db.prepare("UPDATE events SET has_cover_image = 0, updated_at = datetime('now') WHERE id = ?").run(event.id);
+  res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(event.id));
 });
 
 router.get('/:id/qrcode.png', async (req, res) => {
