@@ -13,6 +13,13 @@ services:
       PUBLIC_BASE_URL: https://guestbook.example.com
       MAX_RECORDING_SECONDS: "180"
       MAX_UPLOAD_MB: "50"
+      # Set to "true" if this sits behind a reverse proxy (Caddy/Traefik/nginx),
+      # so upload rate limiting keys off the real guest IP, not the proxy's.
+      TRUST_PROXY: "false"
+      # Local, offline speech-to-text transcripts for every recording.
+      # The whisper.cpp binary/model ship in the image either way; this just
+      # toggles whether the app uses them.
+      ENABLE_TRANSCRIPTION: "true"
     volumes:
       - ringbook_data:/data
     restart: unless-stopped

@@ -16,6 +16,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Informational supply-chain check - doesn't block the build, since a
+      # freshly-disclosed high-severity advisory with no fix yet shouldn't
+      # freeze every PR.
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -37,13 +55,30 @@ jobs:
             type=sha,format=short
 
       # On pull requests this only validates the image still builds - nothing
-      # is pushed. On merge to main it builds and publishes to GHCR.
+      # is pushed. On merge to main it builds and publishes to GHCR. `load:
+      # true` also makes the image available to the local Docker daemon so
+      # the Trivy step below can scan it, regardless of whether it's pushed.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ringbook:ci-scan
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Blocks PR validation builds on fixable CRITICAL/HIGH findings in the
+      # built image (OS packages + app dependencies). Doesn't block push-to-main,
+      # so a same-day zero-day with no fix available yet can't freeze releases.
+      - name: Scan image for vulnerabilities
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ringbook:ci-scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'

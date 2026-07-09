@@ -3,20 +3,21 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import Recorder from '../components/Recorder.jsx';
 import Confetti from '../components/Confetti.jsx';
-import { BookIcon, CheckIcon, PhoneIcon } from '../components/icons.jsx';
+import { BookIcon, CheckIcon, DownloadIcon, PhoneIcon } from '../components/icons.jsx';
 import { occasionIcon } from '../occasions.js';
-
-const SOLEMN_OCCASIONS = new Set(['Funeral']);
+import { SOLEMN_OCCASIONS, counterLabel } from '../messageCounter.js';
 
 export default function GuestRecordPage() {
   const { slug } = useParams();
   const [phase, setPhase] = useState('loading'); // loading | not-found | closed | ready | preview | submitting | done | error
   const [event, setEvent] = useState(null);
   const [config, setConfig] = useState({ maxRecordingSeconds: 180 });
+  const [messageCount, setMessageCount] = useState(0);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [guestName, setGuestName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [savedRecording, setSavedRecording] = useState(null);
   const audioUrlRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function GuestRecordPage() {
         if (cancelled) return;
         setEvent(eventData);
         setConfig(configData);
+        setMessageCount(eventData.recording_count || 0);
         setPhase(eventData.is_active ? 'ready' : 'closed');
       } catch (err) {
         if (!cancelled) setPhase('not-found');
@@ -40,6 +42,13 @@ export default function GuestRecordPage() {
     load();
     return () => { cancelled = true; };
   }, [slug]);
+
+  const clearRecording = () => {
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+    setRecordedBlob(null);
+    setPreviewUrl(null);
+  };
 
   useEffect(() => () => {
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
@@ -55,10 +64,14 @@ export default function GuestRecordPage() {
   };
 
   const handleReRecord = () => {
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-    audioUrlRef.current = null;
-    setRecordedBlob(null);
-    setPreviewUrl(null);
+    clearRecording();
+    setPhase('ready');
+  };
+
+  const handleLeaveAnother = () => {
+    clearRecording();
+    setGuestName('');
+    setSavedRecording(null);
     setPhase('ready');
   };
 
@@ -71,7 +84,9 @@ export default function GuestRecordPage() {
       formData.append('audio', recordedBlob, `message.${extension}`);
       if (guestName.trim()) formData.append('guest_name', guestName.trim());
 
-      await api.post(`/public/events/${slug}/recordings`, formData);
+      const saved = await api.post(`/public/events/${slug}/recordings`, formData);
+      setSavedRecording(saved);
+      setMessageCount((count) => count + 1);
       setPhase('done');
     } catch (err) {
       setErrorMessage(err.message || 'Something went wrong saving your message.');
@@ -113,9 +128,19 @@ export default function GuestRecordPage() {
             </div>
             <h1>Message saved!</h1>
             <p>Thank you for leaving your voice in the {event.title} guestbook.</p>
-            <button type="button" className="button-primary" onClick={() => { setGuestName(''); setPhase('ready'); }}>
-              Leave Another Message
-            </button>
+            <div className="done-actions">
+              {savedRecording && (
+                <a
+                  className="save-copy-link"
+                  href={`/api/public/recordings/${savedRecording.id}/download?token=${savedRecording.download_token}`}
+                >
+                  <DownloadIcon width={14} height={14} /> Save a Copy for Yourself
+                </a>
+              )}
+              <button type="button" className="button-primary" onClick={handleLeaveAnother}>
+                Leave Another Message
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -138,6 +163,7 @@ export default function GuestRecordPage() {
           )}
           <h1>{event.title}</h1>
           {event.greeting && <p className="greeting">{event.greeting}</p>}
+          <p className="message-counter">{counterLabel(event.occasion, messageCount)}</p>
 
           <div key={phase} className="fade-item">
             {(phase === 'ready') && (
@@ -148,12 +174,20 @@ export default function GuestRecordPage() {
               <div className="preview">
                 <span className="preview-label">Your message</span>
                 <audio controls src={previewUrl} />
+                <a
+                  className="save-copy-link"
+                  href={previewUrl}
+                  download={`message-${slug}.${recordedBlob?.type.includes('mp4') ? 'm4a' : 'webm'}`}
+                >
+                  <DownloadIcon width={13} height={13} /> Download this take
+                </a>
                 <input
                   type="text"
                   placeholder="Your name (optional)"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   disabled={phase === 'submitting'}
+                  maxLength={200}
                 />
                 {errorMessage && <p className="error-text">{errorMessage}</p>}
                 <div className="preview-actions">
