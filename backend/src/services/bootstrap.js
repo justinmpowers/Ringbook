@@ -11,7 +11,7 @@ function bootstrapAdmin() {
       hashPassword(config.adminPassword),
     );
     console.log(
-      `Seeded initial admin "${config.adminUsername}" from ADMIN_USERNAME/ADMIN_PASSWORD. `
+      'Seeded initial admin from ADMIN_USERNAME/ADMIN_PASSWORD. '
       + 'Those env vars are only used for this one-time bootstrap - manage further accounts from /admin/users.',
     );
   }
