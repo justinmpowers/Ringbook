@@ -1,7 +1,10 @@
 async function request(path, options = {}) {
+  const headers = { 'X-Ringbook-Client': '1' };
+  if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
-    headers: options.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
+    headers,
     ...options,
   });
 

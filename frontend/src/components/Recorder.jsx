@@ -12,6 +12,8 @@ function pickSupportedMimeType() {
   return CANDIDATE_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
+const WAVEFORM_BARS = 7;
+
 // Records mic audio and hands the finished blob back via onStop.
 // Feature-detects a supported mimeType since Chrome/Firefox record webm/opus
 // while Safari records mp4/aac - the server normalizes either into MP3.
@@ -25,10 +27,51 @@ export default function Recorder({ maxSeconds, onStop }) {
   const chunksRef = useRef([]);
   const startedAtRef = useRef(0);
   const intervalRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const rafRef = useRef(null);
+  const barRefs = useRef([]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+  }, []);
+
+  const stopWaveform = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    analyserRef.current = null;
+  }, []);
+
+  const startWaveform = useCallback((stream) => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const audioCtx = new AudioContextClass();
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.7;
+    source.connect(analyser);
+    audioCtxRef.current = audioCtx;
+    analyserRef.current = analyser;
+    audioCtx.resume().catch(() => {});
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      for (let i = 0; i < WAVEFORM_BARS; i++) {
+        const value = data[Math.floor((i / WAVEFORM_BARS) * data.length)] / 255;
+        const bar = barRefs.current[i];
+        if (bar) bar.style.transform = `scaleY(${0.12 + value * 0.88})`;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    tick();
   }, []);
 
   const stopRecording = useCallback(() => {
@@ -39,8 +82,9 @@ export default function Recorder({ maxSeconds, onStop }) {
 
   useEffect(() => () => {
     clearInterval(intervalRef.current);
+    stopWaveform();
     stopStream();
-  }, [stopStream]);
+  }, [stopStream, stopWaveform]);
 
   const startRecording = async () => {
     setError(null);
@@ -60,6 +104,7 @@ export default function Recorder({ maxSeconds, onStop }) {
 
       recorder.onstop = () => {
         clearInterval(intervalRef.current);
+        stopWaveform();
         const durationSeconds = (Date.now() - startedAtRef.current) / 1000;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         stopStream();
@@ -69,6 +114,7 @@ export default function Recorder({ maxSeconds, onStop }) {
       };
 
       recorder.start();
+      startWaveform(stream);
       startedAtRef.current = Date.now();
       setStatus('recording');
       setElapsedSeconds(0);
@@ -105,6 +151,12 @@ export default function Recorder({ maxSeconds, onStop }) {
           <span className="recorder-pulse-ring" />
           <span className="recorder-pulse-ring recorder-pulse-ring-delay" />
           <span className="recorder-pulse-core"><MicIcon width={28} height={28} /></span>
+        </div>
+        <div className="waveform" aria-hidden="true">
+          {Array.from({ length: WAVEFORM_BARS }).map((_, i) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <span key={i} ref={(el) => { barRefs.current[i] = el; }} className="waveform-bar" />
+          ))}
         </div>
         <p className="recorder-timer">{elapsedSeconds}s <span>· {remaining}s left</span></p>
         <button type="button" className="button-stop" onClick={stopRecording}>

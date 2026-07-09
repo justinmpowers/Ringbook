@@ -14,7 +14,12 @@ function recordingFilePath(recording) {
 }
 
 function getRecordingOr404(req, res) {
-  const recording = db.prepare('SELECT * FROM recordings WHERE id = ?').get(req.params.id);
+  const recording = db.prepare(`
+    SELECT r.* FROM recordings r
+    JOIN events e ON e.id = r.event_id
+    WHERE r.id = ? AND e.owner_id = ?
+  `).get(req.params.id, req.user.id);
+
   if (!recording) {
     res.status(404).json({ error: 'Recording not found' });
     return null;

@@ -1,8 +1,9 @@
 name: Docker
 
+# Only runs on merge to main - the image isn't built (or published) while a
+# PR is still open. PR-time code checks are handled by the separate CodeQL
+# workflow instead.
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
 
@@ -16,11 +17,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Informational supply-chain check - doesn't block the build, since a
+      # freshly-disclosed high-severity advisory with no fix yet shouldn't
+      # freeze a release.
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -36,14 +54,29 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
 
-      # On pull requests this only validates the image still builds - nothing
-      # is pushed. On merge to main it builds and publishes to GHCR.
+      # `load: true` also makes the image available to the local Docker
+      # daemon so the Trivy step below can scan it.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          push: true
+          load: true
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ringbook:ci-scan
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Informational only at this point - the image is already published by
+      # the step above, so a finding here can't prevent that; it's a signal
+      # to go patch and re-release, not a release gate.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        continue-on-error: true
+        with:
+          image-ref: ringbook:ci-scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'

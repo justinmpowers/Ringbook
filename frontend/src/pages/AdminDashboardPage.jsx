@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import EventForm from '../components/EventForm.jsx';
-import { LogoutIcon, PhoneIcon, PlusIcon } from '../components/icons.jsx';
+import { LogoutIcon, PhoneIcon, PlusIcon, UsersIcon } from '../components/icons.jsx';
+import { occasionIcon } from '../occasions.js';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState(null);
+  const [me, setMe] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,9 +17,12 @@ export default function AdminDashboardPage() {
 
     async function load() {
       try {
-        await api.get('/auth/me');
+        const meData = await api.get('/auth/me');
         const data = await api.get('/events');
-        if (!cancelled) setEvents(data);
+        if (!cancelled) {
+          setMe(meData);
+          setEvents(data);
+        }
       } catch (err) {
         if (!cancelled) navigate('/admin/login');
       }
@@ -42,18 +47,24 @@ export default function AdminDashboardPage() {
     navigate('/admin/login');
   };
 
-  if (!events) return <p className="page-center">Loading…</p>;
+  if (!events || !me) return <p className="page-center">Loading…</p>;
 
   return (
     <div className="admin-page">
       <header className="admin-header">
         <div className="brand">
           <span className="brand-mark"><PhoneIcon width={18} height={18} /></span>
-          <h1>Ringbook</h1>
+          <div>
+            <h1>Ringbook</h1>
+            <span className="event-meta">Logged in as {me.username}</span>
+          </div>
         </div>
-        <button type="button" onClick={handleLogout}>
-          <LogoutIcon width={16} height={16} /> Log Out
-        </button>
+        <div className="header-actions">
+          {me.is_owner && <Link to="/admin/users"><UsersIcon width={16} height={16} /> Manage Admins</Link>}
+          <button type="button" onClick={handleLogout}>
+            <LogoutIcon width={16} height={16} /> Log Out
+          </button>
+        </div>
       </header>
 
       <div className="admin-toolbar">
@@ -75,19 +86,29 @@ export default function AdminDashboardPage() {
       )}
 
       <ul className="event-list">
-        {events.map((event) => (
-          <li key={event.id}>
-            <Link to={`/admin/events/${event.id}`} className="card event-list-item">
-              <div>
-                <strong>{event.title}</strong>
-                <span className="event-meta">{event.occasion} · {event.recording_count} message{event.recording_count === 1 ? '' : 's'}</span>
-              </div>
-              <span className={`badge ${event.is_active ? 'badge-active' : 'badge-closed'}`}>
-                {event.is_active ? 'Open' : 'Closed'}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {events.map((event) => {
+          const Icon = occasionIcon(event.occasion);
+          return (
+            <li key={event.id}>
+              <Link to={`/admin/events/${event.id}`} className="card event-list-item">
+                {event.has_cover_image ? (
+                  <span className="occasion-badge occasion-badge-photo">
+                    <img src={`/api/public/events/${event.slug}/cover?v=${encodeURIComponent(event.updated_at)}`} alt="" />
+                  </span>
+                ) : (
+                  <span className="occasion-badge"><Icon width={18} height={18} /></span>
+                )}
+                <div className="event-list-body">
+                  <strong>{event.title}</strong>
+                  <span className="event-meta">{event.occasion} · {event.recording_count} message{event.recording_count === 1 ? '' : 's'}</span>
+                </div>
+                <span className={`badge ${event.is_active ? 'badge-active' : 'badge-closed'}`}>
+                  {event.is_active ? 'Open' : 'Closed'}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

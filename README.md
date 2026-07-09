@@ -14,16 +14,29 @@ image runs the whole thing: the web app, the database, and audio processing.
 ## Features
 
 - **Multiple guestbooks in one instance** — a wedding this year, a reunion in
-  five — each with its own shareable link, greeting message, and recordings.
+  five — each with its own shareable link, greeting message, cover photo, and
+  recordings.
 - **Works from any phone, no app required** — guests just open a link.
 - **Recordings normalized to MP3** server-side (via ffmpeg) so playback and
   downloads work everywhere, regardless of whether the guest's browser
   recorded in webm/opus (Chrome/Firefox) or mp4/aac (Safari).
-- **QR code generation** for printing or displaying at a venue.
+- **Local, offline speech-to-text transcripts** (via bundled whisper.cpp) —
+  every message gets an automatic, searchable transcript. No third-party API
+  ever sees your recordings.
+- **QR code generation and a printable table card (PDF)** for displaying at a venue.
+- **Auto-generated highlight reel** — one click to concatenate every message
+  in a guestbook into a single shareable audio file.
 - **Export a guestbook as a zip** of all its recordings — a permanent backup
   or keepsake.
-- **Single admin login**, single SQLite database, single Docker volume —
-  nothing else to run or manage.
+- **Optional public listen-only album page**, off by default per guestbook,
+  for sharing the whole collection with anyone who couldn't attend.
+- **Webhook notifications** (ntfy, Discord, Slack, or any custom endpoint)
+  when a guest leaves a message.
+- **Scheduled auto-close** — set a date/time a guestbook stops accepting
+  messages, instead of only a manual toggle.
+- **Multiple admin accounts**, each scoped to only the guestbooks they created.
+- **Rate limiting, security headers, and CSRF protection** on by default.
+- Single SQLite database, single Docker volume — nothing else to run or manage.
 
 ## Quick start
 
@@ -49,6 +62,10 @@ Edit `docker-compose.yml` first and set at least:
 
 Then visit `PUBLIC_BASE_URL/admin/login` (or `http://localhost:8080/admin/login`
 if testing locally) to log in and create your first guestbook.
+`ADMIN_USERNAME`/`ADMIN_PASSWORD` are only used once, to seed that first admin
+account on first boot — from then on, accounts live in the database, and you
+can add more from the "Manage Admins" link on the dashboard (each admin only
+sees the guestbooks they created).
 
 ## HTTPS is required for guests to record
 
@@ -69,14 +86,24 @@ All configuration is via environment variables (set in `docker-compose.yml`):
 
 | Variable | Default | Description |
 |---|---|---|
-| `ADMIN_USERNAME` | `admin` | Admin login username. |
-| `ADMIN_PASSWORD` | `changeme` | Admin login password. Change this. |
+| `ADMIN_USERNAME` | `admin` | Username used to seed the first admin account on first boot only. |
+| `ADMIN_PASSWORD` | `changeme` | Password for that first-boot admin account. Change this. |
 | `SESSION_SECRET` | *(insecure default)* | Secret used to sign the admin session cookie. Change this. |
 | `PUBLIC_BASE_URL` | *(empty)* | Public URL of this instance, used to build QR codes and guest links. |
 | `MAX_RECORDING_SECONDS` | `180` | Maximum length of a guest recording, enforced client- and server-side. |
 | `MAX_UPLOAD_MB` | `50` | Maximum upload size for a single recording. |
+| `MAX_COVER_UPLOAD_MB` | `20` | Maximum upload size for a guestbook cover photo. |
+| `TRUST_PROXY` | `false` | Set to `true` if running behind a reverse proxy, so rate limiting keys off the real guest IP instead of the proxy's. |
+| `ENABLE_TRANSCRIPTION` | `true` | Set to `false` to skip local speech-to-text (the whisper.cpp binary/model still ship in the image either way; this just turns the feature off). |
 | `PORT` | `3000` | Port the app listens on inside the container. |
 | `DATA_DIR` | `/data` | Where the SQLite database and recordings are stored. |
+
+Build-time only (`docker build --build-arg ...`, for anyone building their own image):
+
+| Build arg | Default | Description |
+|---|---|---|
+| `WHISPER_MODEL` | `base.en` | Which whisper.cpp model to bundle. Larger models (`small.en`, `medium.en`) trade image size and CPU time for better accuracy. |
+| `WHISPER_VERSION` | `v1.9.1` | Pinned whisper.cpp release to build from source. |
 
 ## Data & backups
 
@@ -90,20 +117,36 @@ Everything Ringbook writes lives under the `/data` volume:
 Back this up however you'd back up any Docker volume — the whole app's state
 is these files. To restore, just mount a volume containing them at `/data`.
 
-Each guestbook also has its own "Export All (.zip)" button in the admin UI,
-which is a convenient one-off backup or keepsake independent of the volume.
+Each guestbook also has its own "Export All (.zip)" and "Highlight Reel"
+buttons in the admin UI, both convenient one-off backups or keepsakes
+independent of the volume.
 
 ## Using it
 
 1. Log in at `/admin/login`.
 2. Create a guestbook — give it a title, pick an occasion, and write a short
-   greeting guests will see before recording.
-3. Share the generated link or QR code — print it, put it on a table card,
-   text it to remote guests, whatever fits the event.
+   greeting guests will see before recording. Optionally add a cover photo,
+   a webhook to get notified of new messages, and a date to auto-close it.
+3. Share the generated link, QR code, or printable table card PDF — put it
+   on a table, text it to remote guests, whatever fits the event.
 4. Guests open the link, record a message (with an optional name), and submit.
-5. Come back to the guestbook's admin page any time to listen, download
-   individual messages, close the guestbook to new submissions, or export
-   everything as a zip.
+5. Come back to the guestbook's admin page any time to listen, read
+   auto-generated transcripts, search messages, download individual
+   recordings, close the guestbook to new submissions, download a highlight
+   reel or zip export, or turn on the public listen-only album page to share
+   the whole collection with people who couldn't attend.
+
+## Local speech-to-text transcripts
+
+Every recording gets an automatic transcript, generated entirely on your own
+hardware by a bundled [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+binary and the `base.en` model (~142MB) — no audio or text ever leaves your
+server. This is the one place Ringbook trades image size (~150MB extra) and
+some CPU time for a feature; it's on by default but can be turned off with
+`ENABLE_TRANSCRIPTION=false` if you'd rather not pay that cost. Transcription
+runs as a single background job at a time, so it won't compete with
+in-flight audio processing on a small box (Raspberry Pi, small VPS) — expect
+a few seconds of processing per message on modest hardware, not instant.
 
 ## Development
 
