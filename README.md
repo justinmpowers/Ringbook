@@ -121,6 +121,20 @@ Each guestbook also has its own "Export All (.zip)" and "Highlight Reel"
 buttons in the admin UI, both convenient one-off backups or keepsakes
 independent of the volume.
 
+### Upgrading from an image built before the container ran as non-root
+
+The app now runs as the non-root `node` user (uid/gid `1000`) inside the
+container. If your `/data` volume was created by an older image, its files
+are still owned by `root` and the app will fail to start with a
+`SQLITE_READONLY` error. Fix it once with:
+
+```
+docker run --rm -v <your_data_volume>:/data alpine chown -R 1000:1000 /data
+```
+
+Fresh volumes created by the current image already get the correct
+ownership automatically.
+
 ## Using it
 
 1. Log in at `/admin/login`.

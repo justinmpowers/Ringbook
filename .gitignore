@@ -5,3 +5,8 @@ data/
 .env
 *.log
 .DS_Store
+*.pem
+*.key
+*.crt
+*.p12
+credentials.json

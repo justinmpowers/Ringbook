@@ -46,6 +46,10 @@ COPY --from=whisper-build /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/
 # suite, which a wildcard would have copied alongside the real model.
 COPY --from=whisper-build /opt/whisper.cpp/models/ggml-${WHISPER_MODEL}.bin /app/whisper-models/ggml-${WHISPER_MODEL}.bin
 
+# Run as the non-root "node" user baked into the base image instead of root.
+RUN mkdir -p /data && chown -R node:node /app /data /usr/local/bin/whisper-cli
+USER node
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV DATA_DIR=/data
