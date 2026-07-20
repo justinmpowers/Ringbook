@@ -34,8 +34,13 @@ RUN sh ./models/download-ggml-model.sh ${WHISPER_MODEL}
 # --- Stage 4: final runtime image ---
 FROM node:20-alpine
 ARG WHISPER_MODEL=base.en
-# libgomp/libstdc++ are whisper-cli's runtime shared library dependencies.
-RUN apk add --no-cache ffmpeg tini libgomp libstdc++
+# Upgrade first so the base image's own packages (e.g. libssl3/libcrypto3,
+# libjxl - the latter reachable via ffmpeg decoding admin-uploaded cover
+# images) pick up security patches instead of whatever shipped in the
+# upstream node:20-alpine layer. libgomp/libstdc++ are whisper-cli's
+# runtime shared library dependencies.
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache ffmpeg tini libgomp libstdc++
 WORKDIR /app
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY backend/ ./

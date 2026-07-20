@@ -13,8 +13,13 @@ services:
       PUBLIC_BASE_URL: https://guestbook.example.com
       MAX_RECORDING_SECONDS: "180"
       MAX_UPLOAD_MB: "50"
-      # Set to "true" if this sits behind a reverse proxy (Caddy/Traefik/nginx),
-      # so upload rate limiting keys off the real guest IP, not the proxy's.
+      # Set to "true" if this sits behind a reverse proxy (Caddy/Traefik/nginx)
+      # terminating HTTPS - which is the standard way to run this in
+      # production (see "HTTPS is required" in the README). It's not just a
+      # rate-limiting nicety: it's also what makes the app trust the
+      # X-Forwarded-Proto header, which is required for the admin session
+      # cookie to be correctly marked HTTPS-only. Leave "false" only for
+      # local testing without a proxy in front (e.g. http://localhost:8080).
       TRUST_PROXY: "false"
       # Local, offline speech-to-text transcripts for every recording.
       # The whisper.cpp binary/model ship in the image either way; this just
