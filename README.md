@@ -93,7 +93,7 @@ All configuration is via environment variables (set in `docker-compose.yml`):
 | `MAX_RECORDING_SECONDS` | `180` | Maximum length of a guest recording, enforced client- and server-side. |
 | `MAX_UPLOAD_MB` | `50` | Maximum upload size for a single recording. |
 | `MAX_COVER_UPLOAD_MB` | `20` | Maximum upload size for a guestbook cover photo. |
-| `TRUST_PROXY` | `false` | Set to `true` if running behind a reverse proxy, so rate limiting keys off the real guest IP instead of the proxy's. |
+| `TRUST_PROXY` | `false` | Set to `true` if running behind a reverse proxy. This isn't just about rate limiting: it's also what lets the app trust `X-Forwarded-Proto`, which the admin session cookie needs to correctly mark itself HTTPS-only. Leave `false` only for local testing without a proxy (e.g. `http://localhost:8080`). |
 | `ENABLE_TRANSCRIPTION` | `true` | Set to `false` to skip local speech-to-text (the whisper.cpp binary/model still ship in the image either way; this just turns the feature off). |
 | `PORT` | `3000` | Port the app listens on inside the container. |
 | `DATA_DIR` | `/data` | Where the SQLite database and recordings are stored. |
@@ -120,6 +120,20 @@ is these files. To restore, just mount a volume containing them at `/data`.
 Each guestbook also has its own "Export All (.zip)" and "Highlight Reel"
 buttons in the admin UI, both convenient one-off backups or keepsakes
 independent of the volume.
+
+### Upgrading from an image built before the container ran as non-root
+
+The app now runs as the non-root `node` user (uid/gid `1000`) inside the
+container. If your `/data` volume was created by an older image, its files
+are still owned by `root` and the app will fail to start with a
+`SQLITE_READONLY` error. Fix it once with:
+
+```
+docker run --rm -v <your_data_volume>:/data alpine chown -R 1000:1000 /data
+```
+
+Fresh volumes created by the current image already get the correct
+ownership automatically.
 
 ## Using it
 

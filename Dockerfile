@@ -34,8 +34,13 @@ RUN sh ./models/download-ggml-model.sh ${WHISPER_MODEL}
 # --- Stage 4: final runtime image ---
 FROM node:20-alpine
 ARG WHISPER_MODEL=base.en
-# libgomp/libstdc++ are whisper-cli's runtime shared library dependencies.
-RUN apk add --no-cache ffmpeg tini libgomp libstdc++
+# Upgrade first so the base image's own packages (e.g. libssl3/libcrypto3,
+# libjxl - the latter reachable via ffmpeg decoding admin-uploaded cover
+# images) pick up security patches instead of whatever shipped in the
+# upstream node:20-alpine layer. libgomp/libstdc++ are whisper-cli's
+# runtime shared library dependencies.
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache ffmpeg tini libgomp libstdc++
 WORKDIR /app
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY backend/ ./
@@ -45,6 +50,10 @@ COPY --from=whisper-build /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/
 # ships small "for-tests" dummy model fixtures for whisper.cpp's own test
 # suite, which a wildcard would have copied alongside the real model.
 COPY --from=whisper-build /opt/whisper.cpp/models/ggml-${WHISPER_MODEL}.bin /app/whisper-models/ggml-${WHISPER_MODEL}.bin
+
+# Run as the non-root "node" user baked into the base image instead of root.
+RUN mkdir -p /data && chown -R node:node /app /data /usr/local/bin/whisper-cli
+USER node
 
 ENV NODE_ENV=production
 ENV PORT=3000
